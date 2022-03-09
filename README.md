@@ -4,11 +4,18 @@
 
 Portalum.Zvt is a library designed to simplify communication with payment terminals via the **ZVT Protocol**. The library is based on Microsoft .NET.
 
-Communication via Network (TCP) is supported and communication via a serial connection is also provided. The most important commands for processing a payment transaction with an electronic POS system are also already integrated.
+Communication via Network (TCP) and communication via a serial connection is supported. The most important commands for processing a payment transaction with an electronic POS system are also already integrated.
 
 The aim of this project is to achieve uncomplicated acceptance by payment service providers. The more often this project is referred to, the better it should work. Please help us to achieve this.
 <br>
 <br>
+
+## How can I use it?
+
+The package is available via [nuget](https://www.nuget.org/packages/Portalum.Zvt)
+```
+PM> install-package Portalum.Zvt
+```
 
 ## Supported features
 
@@ -44,13 +51,6 @@ Information sent from the payment terminal to the cash register
 - BMP Processing
 - TLV Processing
 
-## How can I use it?
-
-The package is available via [nuget](https://www.nuget.org/packages/Portalum.Zvt)
-```
-PM> install-package Portalum.Zvt
-```
-
 ## Important information for the start
 
 Before sending a payment to the terminal, you should consider how to configure the terminal. For example, it can be set that a manual start of a payment at the terminal is no longer possible. You must also set where the receipts are printed directly via the terminal or via an external printer. For the configuration use the `Registration` command.
@@ -58,6 +58,49 @@ Before sending a payment to the terminal, you should consider how to configure t
 ## Examples
 
 Here you can find some code examples how to use this library
+
+### Start Payment
+```cs
+var deviceCommunication = new TcpNetworkDeviceCommunication("192.168.0.10");
+if (!await deviceCommunication.ConnectAsync())
+{
+    return;
+}
+
+using var zvtClient = new ZvtClient(deviceCommunication);
+zvtClient.StatusInformationReceived += (statusInformation) => Console.WriteLine(statusInformation.ErrorMessage);
+await zvtClient.PaymentAsync(10.5M);
+```
+
+### Start End-of-day
+```cs
+var deviceCommunication = new TcpNetworkDeviceCommunication("192.168.0.10");
+if (!await deviceCommunication.ConnectAsync())
+{
+    return;
+}
+
+using var zvtClient = new ZvtClient(deviceCommunication);
+zvtClient.StatusInformationReceived += (statusInformation) => Console.WriteLine(statusInformation.ErrorMessage);
+await zvtClient.EndOfDayAsync();
+```
+
+### Set a custom configuration
+```cs
+var deviceCommunication = new TcpNetworkDeviceCommunication("192.168.0.10");
+if (!await deviceCommunication.ConnectAsync())
+{
+    return;
+}
+
+var clientConfig = new ZvtClientConfig
+{
+    Encoding = ZvtEncoding.CodePage437,
+    Language = Language.German,
+    Password = 000000
+};
+var zvtClient = new ZvtClient(deviceCommunication, clientConfig: clientConfig);
+```
 
 ### Activate logging
 
@@ -74,40 +117,18 @@ var deviceCommunicationLogger = loggerFactory.CreateLogger<TcpNetworkDeviceCommu
 var zvtClientLogger = loggerFactory.CreateLogger<ZvtClient>();
 
 var deviceCommunication = new TcpNetworkDeviceCommunication("192.168.0.10", logger: deviceCommunicationLogger);
+if (!await deviceCommunication.ConnectAsync())
+{
+    return;
+}
+
 var zvtClient = new ZvtClient(deviceCommunication, logger: zvtClientLogger);
 ```
 
-### Set a custom terminal password
-
-```
-var deviceCommunication = new TcpNetworkDeviceCommunication("192.168.0.10");
-var zvtClient = new ZvtClient(deviceCommunication, password: 123456);
-```
-
-### Set a custom network device port
+### Set a custom network terminal device port
 
 ```
 var deviceCommunication = new TcpNetworkDeviceCommunication("192.168.0.10", port: 20007);
-```
-
-### Start payment prcocess
-```cs
-var deviceCommunication = new TcpNetworkDeviceCommunication("192.168.0.10");
-await deviceCommunication.ConnectAsync();
-
-using var zvtClient = new ZvtClient(deviceCommunication);
-zvtClient.StatusInformationReceived += (statusInformation) => Console.WriteLine(statusInformation.ErrorMessage);
-await zvtClient.PaymentAsync(10.5M);
-```
-
-### End-of-day
-```cs
-var deviceCommunication = new TcpNetworkDeviceCommunication("192.168.0.10");
-await deviceCommunication.ConnectAsync();
-
-using var zvtClient = new ZvtClient(deviceCommunication);
-zvtClient.StatusInformationReceived += (statusInformation) => Console.WriteLine(statusInformation.ErrorMessage);
-await zvtClient.EndOfDayAsync();
 ```
 
 ## ControlPanel
@@ -115,7 +136,7 @@ With the Portalum.Zvt.ControlPanel you can test the different ZVT functions.
 
 **To use the tool, the following steps must be performed**
 
-- Install [.NET Desktop Runtime 6.x](https://dotnet.microsoft.com/download/dotnet/6.0)
+- Install at least [.NET Desktop Runtime 6.0.3](https://dotnet.microsoft.com/download/dotnet/6.0)
 - Download and extract the ControlPanel ([download](https://github.com/Portalum/Portalum.Zvt/releases/latest/download/Portalum.Zvt.ControlPanel.zip))
 
 ![Portalum.Zvt.ControlPanel](/doc/ControlPanel.png)
@@ -133,16 +154,27 @@ Provider | Country | Terminal |
 CardComplete | Austria | ingenico iWL250 |
 Hobex | Austria | ingenico Desk/3500 |
 Wordline/PAYONE (SIX) | Austria | yomani touch family |
+Global Payments | Austria | PAX A80 |
 
 ### Known deviations from the standard ZVT protocol
 
 #### CardComplete
-- Encoding is fixed to `UTF-7` instead of default character set `CP437`. There is no way to configure this
+- Encoding is fixed to `ISO-8859-1/ISO-8859-2/ISO-8859-15` instead of default character set `CP437`. There is no way to configure this
 - `Print Line` contains TLV data at the end of the package, after `TLV-activation`. According to official documentation, there should be no TLV data here
 
 #### Hobex
 - No `Print Line` support
 - Sends TLV data even without `TLV-activation`
+
+## General info on the connection of payment terminals
+
+### TCP
+
+Common `Ports` of the device are 20007, 20008
+
+### Serial
+
+Common `BaudRates` is *9600* or *115200*, default `Parity` is *None*, default `DataBits` is *8*, default `StopBits` is *2*
 
 ## ZVT Documentation
 

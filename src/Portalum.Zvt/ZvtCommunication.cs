@@ -1,4 +1,5 @@
 ﻿using Microsoft.Extensions.Logging;
+using Portalum.Zvt.Models;
 using System;
 using System.Linq;
 using System.Threading;
@@ -38,12 +39,17 @@ namespace Portalum.Zvt
             this._deviceCommunication.DataReceived += this.ProcessDataReceived;
         }
 
+        /// <inheritdoc />
         public void Dispose()
         {
             this.Dispose(true);
             GC.SuppressFinalize(this);
         }
 
+        /// <summary>
+        /// Dispose
+        /// </summary>
+        /// <param name="disposing"></param>
         protected virtual void Dispose(bool disposing)
         {
             if (disposing)
@@ -74,7 +80,7 @@ namespace Portalum.Zvt
         /// <param name="acknowledgeReceiveTimeout">T3 Timeout in milliseconds, default 5 seconds</param>
         /// <param name="cancellationToken"></param>
         /// <returns></returns>
-        public async Task<bool> SendCommandAsync(
+        public async Task<SendCommandResult> SendCommandAsync(
             byte[] data,
             int acknowledgeReceiveTimeout = 5000,
             CancellationToken cancellationToken = default)
@@ -87,42 +93,44 @@ namespace Portalum.Zvt
             this._waitForAcknowledge = true;
             try
             {
-                await this._deviceCommunication.SendAsync(data);
+                await this._deviceCommunication.SendAsync(data, linkedCancellationTokenSource.Token).ContinueWith(task => { });
             }
             catch (Exception exception)
             {
                 this._logger.LogError(exception, $"{nameof(SendCommandAsync)} - Cannot send data");
                 this._acknowledgeReceivedCancellationTokenSource.Dispose();
-                return false;
+                return SendCommandResult.SendFailure;
             }
 
             await Task.Delay(acknowledgeReceiveTimeout, linkedCancellationTokenSource.Token).ContinueWith(task =>
             {
                 if (task.Status == TaskStatus.RanToCompletion)
                 {
-                    this._logger.LogError($"{nameof(SendCommandAsync)} - No acknowlege received in the specified timeout {acknowledgeReceiveTimeout}ms");
+                    this._logger.LogError($"{nameof(SendCommandAsync)} - Wait task for acknowledge was aborted");
                 }
 
                 this._waitForAcknowledge = false;
             });
 
+            this._acknowledgeReceivedCancellationTokenSource.Dispose();
+
             if (this._dataBuffer == null)
             {
-                return false;
+                return SendCommandResult.NoDataReceived;
             }
 
             if (this._dataBuffer.SequenceEqual(this._acknowledge))
             {
-                return true;
+                return SendCommandResult.AcknowledgeReceived;
             }
 
             if (this._dataBuffer.Length > 2 && this._dataBuffer[0] == 0x84 && this._dataBuffer[1] != 0x00)
             {
                 this._logger.LogError($"{nameof(SendCommandAsync)} - 'Negative completion' received");
-                return false;
+                return SendCommandResult.NegativeCompletionReceived;
             }
 
-            return false;
+            return SendCommandResult.UnknownFailure;
         }
     }
 }

@@ -42,6 +42,8 @@ namespace Portalum.Zvt.ControlPanel
             this._printLineCache = new StringBuilder();
             this.ButtonDisconnect.IsEnabled = false;
 
+            this.TextBoxAmount.Text = $"{this.CreateRandomAmount()}";
+
             _ = Task.Run(async () => await this.ConnectAsync());
         }
 
@@ -56,6 +58,17 @@ namespace Portalum.Zvt.ControlPanel
             this._cancellationTokenSource?.Dispose();
 
             this._zvtClient?.Dispose();
+        }
+
+        /// <summary>
+        /// Create a random amount from 1 to 5
+        /// </summary>
+        /// <returns></returns>
+        private double CreateRandomAmount()
+        {
+            var random = new Random();
+            var randomValue = random.Next(100, 500);
+            return randomValue / 100.0;
         }
 
         private async void ButtonConnect_Click(object sender, RoutedEventArgs e)
@@ -82,7 +95,12 @@ namespace Portalum.Zvt.ControlPanel
             var loggerCommunication = this._loggerFactory.CreateLogger<TcpNetworkDeviceCommunication>();
             var loggerZvtClient = this._loggerFactory.CreateLogger<ZvtClient>();
 
-            this._deviceCommunication = new TcpNetworkDeviceCommunication(this._deviceConfiguration.IpAddress, port: this._deviceConfiguration.Port, logger: loggerCommunication);
+            this._deviceCommunication = new TcpNetworkDeviceCommunication(
+                ipAddress: this._deviceConfiguration.IpAddress,
+                port:this._deviceConfiguration.Port,
+                enableKeepAlive: this._deviceConfiguration.TcpKeepalive,
+                logger: loggerCommunication);
+
             this._deviceCommunication.ConnectionStateChanged += this.ConnectionStateChanged;
 
             this.CommunicationUserControl.SetDeviceCommunication(this._deviceCommunication);
@@ -339,6 +357,11 @@ namespace Portalum.Zvt.ControlPanel
 
         private void StatusInformationReceived(StatusInformation statusInformation)
         {
+            if (statusInformation == null)
+            {
+                return;
+            }
+
             this.IntermediateStatusInformationReceived(string.Empty);
 
             var lines = new List<string>();
@@ -665,7 +688,7 @@ namespace Portalum.Zvt.ControlPanel
 
         private async void ButtonPay_Click(object sender, RoutedEventArgs e)
         {
-            if (!decimal.TryParse(this.TextBoxAmount.Text, NumberStyles.Currency, CultureInfo.InvariantCulture, out var amount))
+            if (!decimal.TryParse(this.TextBoxAmount.Text.Replace(',', '.'), NumberStyles.Currency, CultureInfo.InvariantCulture, out var amount))
             {
                 MessageBox.Show("Cannot parse amount");
                 return;
@@ -676,7 +699,7 @@ namespace Portalum.Zvt.ControlPanel
 
         private async void ButtonRefund_Click(object sender, RoutedEventArgs e)
         {
-            if (!decimal.TryParse(this.TextBoxAmount.Text, NumberStyles.Currency, CultureInfo.InvariantCulture, out var amount))
+            if (!decimal.TryParse(this.TextBoxAmount.Text.Replace(',', '.'), NumberStyles.Currency, CultureInfo.InvariantCulture, out var amount))
             {
                 MessageBox.Show("Cannot parse amount");
                 return;

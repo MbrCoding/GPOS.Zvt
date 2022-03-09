@@ -1,5 +1,6 @@
 ﻿using Microsoft.Extensions.Logging;
-using SuperSimpleTcp;
+using Microsoft.Extensions.Logging.Abstractions;
+using Nager.TcpClient;
 using System;
 using System.Threading;
 using System.Threading.Tasks;
@@ -9,10 +10,11 @@ namespace Portalum.Zvt
     /// <summary>
     /// TcpNetwork DeviceCommunication
     /// </summary>
-    public class TcpNetworkDeviceCommunication : IDeviceCommunication, IDisposable
+    public class TcpNetworkDeviceCommunication : IDeviceCommunication
     {
         private readonly string _ipAddress;
-        private readonly SimpleTcpClient _simpleTcpClient;
+        private readonly int _port;
+        private readonly TcpClient _tcpClient;
         private readonly ILogger<TcpNetworkDeviceCommunication> _logger;
 
         /// <inheritdoc />
@@ -38,24 +40,57 @@ namespace Portalum.Zvt
             ILogger<TcpNetworkDeviceCommunication> logger = default)
         {
             this._ipAddress = ipAddress;
+            this._port = port;
 
-            this._simpleTcpClient = new SimpleTcpClient(ipAddress, port);
-            this._simpleTcpClient.Events.DataReceived += this.Receive;
-            this._simpleTcpClient.Events.Connected += this.Connected;
-            this._simpleTcpClient.Events.Disconnected += this.Disconnected;
+            if (logger == null)
+            {
+                logger = new NullLogger<TcpNetworkDeviceCommunication>();
+            }
+            this._logger = logger;
 
             if (enableKeepAlive)
             {
-                this._simpleTcpClient.Keepalive = new SimpleTcpKeepaliveSettings
+                var keepAliveConfig = new TcpClientKeepAliveConfig
                 {
-                    EnableTcpKeepAlives = true,
-                    TcpKeepAliveTime = 2,
-                    TcpKeepAliveInterval = 2,
-                    TcpKeepAliveRetryCount = 1
+                    KeepAliveTime = 2,
+                    KeepAliveInterval = 2,
+                    KeepAliveRetryCount = 1
                 };
+
+                this._tcpClient = new TcpClient(keepAliveConfig: keepAliveConfig);
+            }
+            else
+            {
+                this._tcpClient = new TcpClient();
             }
 
+            this.RegisterEvents();
+        }
+
+        /// <summary>
+        /// TcpNetwork DeviceCommunication
+        /// </summary>
+        /// <param name="tcpClient"></param>
+        /// <param name="ipAddress"></param>
+        /// <param name="port"></param>
+        /// <param name="logger"></param>
+        public TcpNetworkDeviceCommunication(
+            TcpClient tcpClient,
+            string ipAddress,
+            int port = 20007,
+            ILogger<TcpNetworkDeviceCommunication> logger = default)
+        {
+            this._tcpClient = tcpClient;
+            this._ipAddress = ipAddress;
+            this._port = port;
+
+            if (logger == null)
+            {
+                logger = new NullLogger<TcpNetworkDeviceCommunication>();
+            }
             this._logger = logger;
+
+            this.RegisterEvents();
         }
 
         /// <inheritdoc />
@@ -70,28 +105,40 @@ namespace Portalum.Zvt
             // Check to see if Dispose has already been called.
             if (disposing)
             {
-                if (this._simpleTcpClient == null)
+                if (this._tcpClient == null)
                 {
                     return;
                 }
 
-                this._simpleTcpClient.Events.DataReceived -= this.Receive;
-                this._simpleTcpClient.Events.Connected -= this.Connected;
-                this._simpleTcpClient.Events.Disconnected -= this.Disconnected;
+                this.UnregisterEvents();
 
-                if (this._simpleTcpClient.IsConnected)
+                if (this._tcpClient.IsConnected)
                 {
-                    this._simpleTcpClient.Disconnect();
+                    this._tcpClient.Disconnect();
                 }
 
-                this._simpleTcpClient.Dispose();
+                this._tcpClient.Dispose();
             }
+        }
+
+        private void RegisterEvents()
+        {
+            this._tcpClient.DataReceived += this.Receive;
+            this._tcpClient.Connected += this.Connected;
+            this._tcpClient.Disconnected += this.Disconnected;
+        }
+
+        private void UnregisterEvents()
+        {
+            this._tcpClient.DataReceived -= this.Receive;
+            this._tcpClient.Connected -= this.Connected;
+            this._tcpClient.Disconnected -= this.Disconnected;
         }
 
         /// <inheritdoc />
         public bool IsConnected
         {
-            get { return this._simpleTcpClient.IsConnected; }
+            get { return this._tcpClient.IsConnected; }
         }
 
         /// <inheritdoc />
@@ -101,20 +148,20 @@ namespace Portalum.Zvt
         }
 
         /// <inheritdoc />
-        public Task<bool> ConnectAsync(CancellationToken cancellationToken = default)
+        public async Task<bool> ConnectAsync(CancellationToken cancellationToken = default)
         {
             try
             {
-                this._logger?.LogInformation($"{nameof(ConnectAsync)}");
-                this._simpleTcpClient.Connect();
-                return Task.FromResult(true);
+                this._logger.LogInformation($"{nameof(ConnectAsync)}");
+
+                return await this._tcpClient.ConnectAsync(this._ipAddress, this._port, cancellationToken);
             }
             catch (Exception exception)
             {
-                this._logger?.LogError($"{nameof(ConnectAsync)} - {exception}");
+                this._logger.LogError($"{nameof(ConnectAsync)} - {exception}");
             }
 
-            return Task.FromResult(false);
+            return false;
         }
 
         /// <inheritdoc />
@@ -122,45 +169,47 @@ namespace Portalum.Zvt
         {
             try
             {
-                this._logger?.LogInformation($"{nameof(DisconnectAsync)}");
-                this._simpleTcpClient.Disconnect();
+                this._logger.LogInformation($"{nameof(DisconnectAsync)}");
+                this._tcpClient.Disconnect();
                 return Task.FromResult(true);
             }
             catch (Exception exception)
             {
-                this._logger?.LogError($"{nameof(DisconnectAsync)} - {exception}");
+                this._logger.LogError($"{nameof(DisconnectAsync)} - {exception}");
             }
 
             return Task.FromResult(false);
         }
 
-        private void Connected(object sender, ConnectionEventArgs e)
+        private void Connected()
         {
-            this._logger?.LogInformation($"{nameof(Connected)} {e.IpPort}");
+            this._logger.LogInformation($"{nameof(Connected)}");
 
             this.ConnectionStateChanged?.Invoke(ConnectionState.Connected);
         }
 
-        private void Disconnected(object sender, ConnectionEventArgs e)
+        private void Disconnected()
         {
-            this._logger?.LogInformation($"{nameof(Disconnected)} {e.IpPort} {e.Reason}");
+            this._logger.LogInformation($"{nameof(Disconnected)}");
 
             this.ConnectionStateChanged?.Invoke(ConnectionState.Disconnected);
         }
 
+        private void Receive(byte[] data)
+        {
+            this._logger.LogDebug($"{nameof(Receive)} - {BitConverter.ToString(data)}");
+            this.DataReceived?.Invoke(data);
+        }
+
         /// <inheritdoc />
-        public async Task SendAsync(byte[] data)
+        public async Task SendAsync(
+            byte[] data,
+            CancellationToken cancellationToken = default)
         {
             this.DataSent?.Invoke(data);
 
-            this._logger?.LogDebug($"{nameof(SendAsync)} - {BitConverter.ToString(data)}");
-            await this._simpleTcpClient.SendAsync(data);
-        }
-
-        private void Receive(object sender, DataReceivedEventArgs e)
-        {
-            this._logger?.LogDebug($"{nameof(Receive)} - {BitConverter.ToString(e.Data)}");
-            this.DataReceived?.Invoke(e.Data);
+            this._logger.LogDebug($"{nameof(SendAsync)} - {BitConverter.ToString(data)}");
+            await this._tcpClient.SendAsync(data, cancellationToken);
         }
     }
 }

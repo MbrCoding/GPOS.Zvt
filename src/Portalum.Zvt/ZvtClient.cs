@@ -42,56 +42,13 @@ namespace Portalum.Zvt
         /// </summary>
         /// <param name="deviceCommunication"></param>
         /// <param name="logger"></param>
-        /// <param name="password">The password of the PT device</param>
-        /// <param name="receiveHandler">The password of the PT device</param>
-        /// <param name="language"></param>
-        public ZvtClient(
-            IDeviceCommunication deviceCommunication,
-            ILogger<ZvtClient> logger = default,
-            int password = 000000,
-            IReceiveHandler receiveHandler = default,
-            Language language = Language.English)
-        {
-            this._commandCompletionTimeout = TimeSpan.FromSeconds(120);
-
-            if (logger == null)
-            {
-                logger = new NullLogger<ZvtClient>();
-            }
-            this._logger = logger;
-
-            this._passwordData = NumberHelper.IntToBcd(password);
-
-            #region ReceiveHandler
-
-            Encoding.RegisterProvider(CodePagesEncodingProvider.Instance);
-
-            if (receiveHandler == default)
-            {
-                this.InitializeReceiveHandler(language, Encoding.GetEncoding(437));
-            }
-            else
-            {
-                this._receiveHandler = receiveHandler;
-                this.RegisterReceiveHandlerEvents();
-            }
-
-            #endregion
-
-            this._zvtCommunication = new ZvtCommunication(logger, deviceCommunication);
-            this._zvtCommunication.DataReceived += this.DataReceived;
-        }
-
-        /// <summary>
-        /// ZvtClient
-        /// </summary>
-        /// <param name="deviceCommunication"></param>
-        /// <param name="logger"></param>
         /// <param name="clientConfig">ZVT Configuration</param>
+        /// <param name="receiveHandler">Inject own receive handler</param>
         public ZvtClient(
             IDeviceCommunication deviceCommunication,
             ILogger<ZvtClient> logger = default,
-            ZvtClientConfig clientConfig = default)
+            ZvtClientConfig clientConfig = default,
+            IReceiveHandler receiveHandler = default)
         {
             if (logger == null)
             {
@@ -109,15 +66,26 @@ namespace Portalum.Zvt
             this._passwordData = NumberHelper.IntToBcd(clientConfig.Password);
 
             Encoding.RegisterProvider(CodePagesEncodingProvider.Instance);
-            this.InitializeReceiveHandler(clientConfig.Language, this.GetEncoding(clientConfig.Encoding));
+
+            #region ReceiveHandler
+
+            if (receiveHandler == default)
+            {
+                this.InitializeReceiveHandler(clientConfig.Language, this.GetEncoding(clientConfig.Encoding));
+            }
+            else
+            {
+                this._receiveHandler = receiveHandler;
+                this.RegisterReceiveHandlerEvents();
+            }
+
+            #endregion
 
             this._zvtCommunication = new ZvtCommunication(logger, deviceCommunication);
             this._zvtCommunication.DataReceived += this.DataReceived;
         }
 
-        /// <summary>
-        /// Dispose
-        /// </summary>
+        /// <inheritdoc />
         public void Dispose()
         {
             this.Dispose(true);
@@ -143,10 +111,14 @@ namespace Portalum.Zvt
         {
             switch (zvtEncoding)
             {
-                case ZvtEncoding.UTF7:
-                    return Encoding.UTF7;
                 case ZvtEncoding.UTF8:
                     return Encoding.UTF8;
+                case ZvtEncoding.ISO_8859_1:
+                    return Encoding.GetEncoding("iso-8859-1");
+                case ZvtEncoding.ISO_8859_2:
+                    return Encoding.GetEncoding("iso-8859-2");
+                case ZvtEncoding.ISO_8859_15:
+                    return Encoding.GetEncoding("iso-8859-15");
                 case ZvtEncoding.CodePage437:
                 default:
                     return Encoding.GetEncoding(437);
@@ -267,10 +239,13 @@ namespace Portalum.Zvt
 
                 this._logger.LogDebug($"{nameof(SendCommandAsync)} - Send command to PT");
 
-                if (!await this._zvtCommunication.SendCommandAsync(commandData, cancellationToken: cancellationToken))
+                var sendCommandResult = await this._zvtCommunication.SendCommandAsync(commandData, cancellationToken: cancellationToken);
+                if (sendCommandResult != SendCommandResult.AcknowledgeReceived)
                 {
                     this._logger.LogError($"{nameof(SendCommandAsync)} - Failure on send command");
                     commandResponse.State = CommandResponseState.Error;
+                    commandResponse.ErrorMessage = sendCommandResult.ToString();
+
                     return commandResponse;
                 }
 
