@@ -28,6 +28,7 @@ namespace Portalum.Zvt.ControlPanel.Dialogs
         private void CloseDialog()
         {
             this.DeviceConfiguration.IpAddress = this.TextBoxIpAddress.Text.Trim();
+            this.DeviceConfiguration.Port = int.Parse(this.TextBoxPort.Text.Trim());
             this.DeviceConfiguration.Language = (Language)this.ComboBoxLanguage.SelectedItem;
             this.DeviceConfiguration.Encoding = (ZvtEncoding)this.ComboBoxEncoding.SelectedItem;
 

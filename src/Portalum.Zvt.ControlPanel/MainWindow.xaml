@@ -5,7 +5,7 @@
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         xmlns:local="clr-namespace:Portalum.Zvt.ControlPanel"
         mc:Ignorable="d"
-        Title="Portalum ZVT ControlPanel (ECR)"
+        Title="G-POS ZVT Test Suite (ECR)"
         Height="560"
         Width="800"
         MinWidth="600"
@@ -19,7 +19,11 @@
     </WindowChrome.WindowChrome>
 
     <Grid>
-        <TabControl Margin="0" BorderThickness="0,2,0,0" BorderBrush="{StaticResource PrimaryColor}" Background="{StaticResource SecondaryColor}" Padding="0">
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="63*"/>
+            <ColumnDefinition Width="737*"/>
+        </Grid.ColumnDefinitions>
+        <TabControl BorderThickness="0,2,0,0" BorderBrush="{StaticResource PrimaryColor}" Background="{StaticResource SecondaryColor}" Padding="0" Grid.ColumnSpan="2">
             <TabControl.Resources>
                 <Style TargetType="TabItem">
                     <Setter Property="Template">

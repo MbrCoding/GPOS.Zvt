@@ -444,6 +444,24 @@ namespace Portalum.Zvt
             return await this.SendCommandAsync(fullPackage, cancellationToken: cancellationToken);
         }
 
+        public async Task<CommandResponse> RefundAsync2(
+            decimal amount,
+            byte[] trace,
+            CancellationToken cancellationToken = default)
+        {
+            this._logger.LogInformation($"{nameof(RefundAsync)} - Execute");
+
+            var package = new List<byte>();
+            package.AddRange(this._passwordData);
+            package.Add(0x04); //Amount prefix
+            package.AddRange(NumberHelper.DecimalToBcd(amount));
+            package.Add(0x0B); //Trace prefix
+            package.AddRange(trace);
+
+            var fullPackage = this.CreatePackage(new byte[] { 0x06, 0x31 }, package);
+            return await this.SendCommandAsync(fullPackage, cancellationToken: cancellationToken);
+        }
+
         /// <summary>
         /// End-of-Day (06 50)
         /// ECR induces the PT to transfer the stored turnover to the host.

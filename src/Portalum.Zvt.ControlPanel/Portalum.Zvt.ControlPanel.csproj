@@ -7,7 +7,11 @@
     <ApplicationIcon>Application.ico</ApplicationIcon>
 
     <Version>2.7.0</Version>
-    <Company>Portalum</Company>
+    <Company>G-POS</Company>
+    <PackageId>$(AssemblyName)</PackageId>
+    <Product>$(AssemblyName)</Product>
+    <Authors>$(AssemblyName)</Authors>
+    <AssemblyName>GPOS-ZVT-Client</AssemblyName>
   </PropertyGroup>
 
   <ItemGroup>
